@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/adam/anaconda3/envs/fetch/bin/python
 
 import argparse
 import logging
@@ -56,7 +56,15 @@ def cand2h5(cand_val):
     cand.get_chunk()
     cand.fp.close()
     logging.info('Got Chunk')
-    cand.dmtime()
+    if args.dm_range != 0:
+        cand.dmtime(range_dm = args.dm_range)
+        #define dmr for plotting
+        dmr = [dm-args.dm_range,dm+args.dm_range]
+    else:
+        cand.dmtime()
+        #0,0 gives default settings for plotting
+        dmr = [0,0]
+
     logging.info('Made DMT')
     if args.opt_dm:
         logging.info('Optimising DM')
@@ -73,7 +81,6 @@ def cand2h5(cand_val):
         time_decimate_factor = 1
     else:
         time_decimate_factor = pulse_width // 2
-
     # Frequency - Time reshaping
     cand.decimate(key='ft', axis=0, pad=True, decimate_factor=time_decimate_factor, mode='median')
     crop_start_sample_ft = cand.dedispersed.shape[0] // 2 - args.time_size // 2
@@ -87,7 +94,6 @@ def cand2h5(cand_val):
     else:
         cand.resize(key='ft', size=args.frequency_size, axis=1, anti_aliasing=True)
         logging.info(f'Resized Frequency axis of FT to fsize: {cand.dedispersed.shape[1]}')
-
     # DM-time reshaping
     cand.decimate(key='dmt', axis=1, pad=True, decimate_factor=time_decimate_factor, mode='median')
     crop_start_sample_dmt = cand.dmt.shape[1] // 2 - args.time_size // 2
@@ -101,7 +107,7 @@ def cand2h5(cand_val):
     logging.info(fout)
     if args.plot:
         logging.info('Displaying the candidate')
-        plot_h5(fout, show=False, save=True, detrend=False)
+        plot_h5(fout, show=False, save=True, detrend=False,dm_range = dmr)
     return None
 
 
@@ -117,6 +123,8 @@ if __name__ == '__main__':
                         action='store_true')
     parser.add_argument('-o', '--fout', help='Output file directory for candidate h5', type=str)
     parser.add_argument('-opt', '--opt_dm', dest='opt_dm', help='Optimise DM', action='store_true', default=False)
+    parser.add_argument('-dmr', '--dm_range', type=int, help='Range of DM to use to make the DMT plots', default=0)
+
     values = parser.parse_args()
 
     logging_format = '%(asctime)s - %(funcName)s -%(name)s - %(levelname)s - %(message)s'
@@ -133,5 +141,7 @@ if __name__ == '__main__':
         process_list.append(
             [row['fil_file'], row['snr'], 2 ** row['width'], row['dm'], row['label'], row['stime'],
              row['kill_mask_path'], values])
+    # for p in process_list:
+        # cand2h5(p)
     with Pool(processes=values.nproc) as pool:
-        pool.map(cand2h5, process_list, chunksize=1)
+       pool.map(cand2h5, process_list, chunksize=1)
